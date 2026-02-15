@@ -1,5 +1,6 @@
 import Component from "@glimmer/component";
 import { Textarea } from "@ember/component";
+import { fn } from "@ember/helper";
 import { on } from "@ember/modifier";
 import { action } from "@ember/object";
 import { tracked } from "@glimmer/tracking";
@@ -8,6 +9,8 @@ import DButton from "discourse/components/d-button";
 import DModalCancel from "discourse/components/d-modal-cancel";
 import TextField from "discourse/components/text-field";
 import { popupAjaxError } from "discourse/lib/ajax-error";
+import { eq, not } from "discourse/truth-helpers";
+import { i18n } from "discourse-i18n";
 import {
   addCollectionItem,
   createCollection,
