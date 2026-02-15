@@ -16,30 +16,35 @@ module DiscourseCollections
       collection_id = extract_collection_id(controller.request&.path)
       return "" if collection_id.blank?
 
-      collection = Collection.includes(:creator).find_by(id: collection_id)
-      return "" if collection.blank?
+      Discourse.cache.fetch(
+        DiscourseCollections::Cache.meta_tags_key(collection_id: collection_id),
+        expires_in: 10.minutes,
+      ) do
+        collection = Collection.includes(:creator).find_by(id: collection_id)
+        next "" if collection.blank?
 
-      avatar_template = collection.creator&.avatar_template
-      avatar_url = avatar_template.present? ? avatar_template.gsub("{size}", "240") : nil
-      absolute_avatar_url =
-        if avatar_url.present? && avatar_url.start_with?("/")
-          "#{Discourse.base_url_no_prefix}#{avatar_url}"
-        else
-          avatar_url
-        end
+        avatar_template = collection.creator&.avatar_template
+        avatar_url = avatar_template.present? ? avatar_template.gsub("{size}", "240") : nil
+        absolute_avatar_url =
+          if avatar_url.present? && avatar_url.start_with?("/")
+            "#{Discourse.base_url_no_prefix}#{avatar_url}"
+          else
+            avatar_url
+          end
 
-      title = "淘专辑：#{collection.title}"
-      description = collection.description.presence || "发现来自社区的精选主题与回复收藏。"
+        title = "淘专辑：#{collection.title}"
+        description = collection.description.presence || "发现来自社区的精选主题与回复收藏。"
 
-      tags = []
-      tags << %(<meta property="og:title" content="#{escape(title)}">)
-      tags << %(<meta property="og:description" content="#{escape(description.truncate(200))}">)
-      tags << %(<meta property="og:type" content="website">)
-      tags << %(<meta property="og:image" content="#{escape(absolute_avatar_url)}">) if absolute_avatar_url.present?
-      tags << %(<meta name="twitter:card" content="summary_large_image">)
-      tags << %(<meta name="twitter:title" content="#{escape(title)}">)
-      tags << %(<meta name="twitter:description" content="#{escape(description.truncate(200))}">)
-      tags.join("\n")
+        tags = []
+        tags << %(<meta property="og:title" content="#{escape(title)}">)
+        tags << %(<meta property="og:description" content="#{escape(description.truncate(200))}">)
+        tags << %(<meta property="og:type" content="website">)
+        tags << %(<meta property="og:image" content="#{escape(absolute_avatar_url)}">) if absolute_avatar_url.present?
+        tags << %(<meta name="twitter:card" content="summary_large_image">)
+        tags << %(<meta name="twitter:title" content="#{escape(title)}">)
+        tags << %(<meta name="twitter:description" content="#{escape(description.truncate(200))}">)
+        tags.join("\n")
+      end
     end
 
     private

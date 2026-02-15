@@ -3,8 +3,8 @@
 # name: discourse-collections
 # about: Adds a "Collections" feature similar to Discuz! Tao Album
 # version: 0.1
-# authors: YourName
-# url: https://github.com/yourname/discourse-collections
+# authors: Jackzhang144
+# url: https://github.com/InternationalRiversiders/discourse-collections
 
 enabled_site_setting :collections_enabled
 
@@ -15,6 +15,7 @@ module ::DiscourseCollections
 end
 
 require_relative "lib/discourse_collections/engine"
+require_relative "lib/discourse_collections/cache"
 require_relative "lib/discourse_collections/meta_tags_builder"
 
 Discourse::Application.routes.append do
@@ -63,8 +64,6 @@ after_initialize do
   end
 
   add_to_serializer(:current_user, :can_create_collections) do
-    object.present? &&
-      object.trust_level >= SiteSetting.min_trust_level_to_create_collection.to_i &&
-      Collection.where(creator_user_id: object.id).count < SiteSetting.max_collections_per_user.to_i
+    object.present? && object.trust_level >= SiteSetting.min_trust_level_to_create_collection.to_i
   end
 end

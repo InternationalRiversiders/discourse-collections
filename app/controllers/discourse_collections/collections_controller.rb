@@ -1,10 +1,16 @@
 # frozen_string_literal: true
+require "set"
 
 module DiscourseCollections
   class CollectionsController < ::ApplicationController
     requires_plugin "discourse-collections"
 
     PLAZA_FILTERS = %w[latest most_followed recommended].freeze
+    INDEX_CACHE_TTL = 2.minutes
+    BY_USER_CACHE_TTL = 2.minutes
+    MINE_CACHE_TTL = 45.seconds
+    SHOW_CACHE_TTL = 2.minutes
+    ROLE_EVENTS_CACHE_TTL = 1.minute
 
     before_action :ensure_logged_in,
                   only: [
@@ -54,29 +60,107 @@ module DiscourseCollections
     before_action :ensure_staff!, only: [:set_recommended]
 
     def index
-      collections = base_plaza_scope
-      collections = apply_filter(collections)
-      collections = apply_search(collections)
-      collections = collections.limit(limit_param)
+      filter = normalized_filter
+      q = params[:q].to_s.strip
+      limit = limit_param
 
-      render_json_dump(collections: collections.map { |collection| serialize_collection(collection) })
+      payload =
+        Discourse.cache.fetch(
+          DiscourseCollections::Cache.plaza_key(filter: filter, q: q, limit: limit),
+          expires_in: INDEX_CACHE_TTL,
+        ) do
+          collections = base_plaza_scope
+          collections = apply_filter(collections, filter)
+          collections = apply_search(collections, q)
+          collections = collections.limit(limit).to_a
+
+          {
+            collections:
+              serialize_collections(
+                collections,
+                viewer: nil,
+                contains_topic_id: nil,
+                contains_post_id: nil,
+              ),
+          }
+        end
+
+      render_json_dump(
+        collections:
+          apply_current_user_overlay(
+            payload[:collections],
+            contains_topic_id: nil,
+            contains_post_id: nil,
+          ),
+      )
     end
 
     def mine
-      @contains_target_topic_id = params[:contains_topic_id].presence&.to_i
-      @contains_target_post_id = params[:contains_post_id].presence&.to_i
+      contains_topic_id = params[:contains_topic_id].presence&.to_i
+      contains_post_id = params[:contains_post_id].presence&.to_i
+      q = params[:q].to_s.strip
+      limit = limit_param
 
-      collections = Collection.manageable_by(current_user.id).includes(:creator, :owner)
-      collections = apply_search(collections)
-      collections = collections.latest_first.limit(limit_param)
-      render_json_dump(collections: collections.map { |collection| serialize_collection(collection) })
+      payload =
+        Discourse.cache.fetch(
+          DiscourseCollections::Cache.mine_key(
+            user_id: current_user.id,
+            q: q,
+            limit: limit,
+            contains_topic_id: contains_topic_id,
+            contains_post_id: contains_post_id,
+          ),
+          expires_in: MINE_CACHE_TTL,
+        ) do
+          collections = Collection.manageable_by(current_user.id).includes(:creator, :owner)
+          collections = apply_search(collections, q)
+          collections = collections.latest_first.limit(limit).to_a
+          {
+            collections:
+              serialize_collections(
+                collections,
+                viewer: current_user,
+                contains_topic_id: contains_topic_id,
+                contains_post_id: contains_post_id,
+              ),
+          }
+        end
+
+      render_json_dump(collections: payload[:collections])
     end
 
     def by_user
       user = fetch_user
-      collections = Collection.for_creator(user.id).latest_first.limit(limit_param)
-      collections = apply_search(collections)
-      render_json_dump(collections: collections.map { |collection| serialize_collection(collection) })
+      q = params[:q].to_s.strip
+      limit = limit_param
+
+      payload =
+        Discourse.cache.fetch(
+          DiscourseCollections::Cache.by_user_key(user_id: user.id, q: q, limit: limit),
+          expires_in: BY_USER_CACHE_TTL,
+        ) do
+          collections = Collection.for_creator(user.id).includes(:creator, :owner).latest_first.limit(limit)
+          collections = apply_search(collections, q)
+          collections = collections.to_a
+          {
+            collections:
+              serialize_collections(
+                collections,
+                viewer: nil,
+                contains_topic_id: nil,
+                contains_post_id: nil,
+              ),
+          }
+        end
+
+      render_json_dump(
+        collections:
+          apply_current_user_overlay(
+            payload[:collections],
+            contains_topic_id: nil,
+            contains_post_id: nil,
+          ),
+      )
     end
 
     def create
@@ -93,6 +177,7 @@ module DiscourseCollections
       collection.owner = current_user
 
       if collection.save
+        touch_collection_cache!(collection.id)
         render_json_dump(collection: serialize_collection(collection))
       else
         render_json_error(collection)
@@ -101,6 +186,7 @@ module DiscourseCollections
 
     def update
       if @collection.update(collection_params)
+        touch_collection_cache!(@collection.id)
         render_json_dump(collection: serialize_collection(@collection.reload))
       else
         render_json_error(@collection)
@@ -108,10 +194,32 @@ module DiscourseCollections
     end
 
     def show
-      collection_items = @collection.collection_items.includes(:topic, :post, :collected_by_user)
+      payload =
+        Discourse.cache.fetch(
+          DiscourseCollections::Cache.show_key(collection_id: @collection.id),
+          expires_in: SHOW_CACHE_TTL,
+        ) do
+          collection_items = @collection.collection_items.includes(:topic, :post, :collected_by_user)
+          {
+            collection:
+              serialize_collection(
+                @collection,
+                include_items: true,
+                collection_items: collection_items,
+                viewer: nil,
+                contains_topic_id: nil,
+                contains_post_id: nil,
+              ),
+          }
+        end
 
       render_json_dump(
-        collection: serialize_collection(@collection, include_items: true, collection_items: collection_items),
+        collection:
+          apply_current_user_overlay_to_collection(
+            payload[:collection],
+            contains_topic_id: nil,
+            contains_post_id: nil,
+          ),
       )
     end
 
@@ -134,6 +242,7 @@ module DiscourseCollections
       if item.errors.added?(:topic_id, :taken) || item.errors.added?(:post_id, :taken)
         render_json_error("Item already exists in this collection", status: 422)
       elsif item.persisted?
+        touch_collection_cache!(@collection.id)
         notify_collected_author(item)
         render_json_dump(item: serialize_item(item))
       else
@@ -144,41 +253,48 @@ module DiscourseCollections
     def remove_item
       removed = @collection.remove_item(params[:item_id])
       raise ActiveRecord::RecordNotFound if !removed
+      touch_collection_cache!(@collection.id)
       render json: success_json
     end
 
     def move_item
       position = params.require(:position).to_i
       item = @collection.move_item(params[:item_id], position)
+      touch_collection_cache!(@collection.id)
       render_json_dump(item: serialize_item(item))
     end
 
     def invite_maintainer
       user = resolve_user!(id_key: :user_id, username_key: :username)
       membership = @collection.invite_maintainer!(actor: current_user, user: user, note: params[:note])
+      touch_collection_cache!(@collection.id)
       render_json_dump(membership: serialize_membership(membership))
     end
 
     def apply_maintainer
       membership = @collection.apply_for_maintainer!(user: current_user, note: params[:note])
+      touch_collection_cache!(@collection.id)
       render_json_dump(membership: serialize_membership(membership))
     end
 
     def approve_maintainer
       user = User.find(params.require(:user_id))
       membership = @collection.approve_maintainer_application!(actor: current_user, user: user)
+      touch_collection_cache!(@collection.id)
       render_json_dump(membership: serialize_membership(membership))
     end
 
     def reject_maintainer
       user = User.find(params.require(:user_id))
       membership = @collection.reject_maintainer_application!(actor: current_user, user: user)
+      touch_collection_cache!(@collection.id)
       render_json_dump(membership: serialize_membership(membership))
     end
 
     def remove_maintainer
       user = User.find(params.require(:user_id))
       membership = @collection.remove_maintainer!(actor: current_user, user: user)
+      touch_collection_cache!(@collection.id)
       render_json_dump(membership: serialize_membership(membership))
     end
 
@@ -186,22 +302,32 @@ module DiscourseCollections
       new_owner = resolve_user!(id_key: :new_owner_user_id, username_key: :new_owner_username)
       @collection.transfer_ownership!(actor: current_user, new_owner: new_owner)
       @collection.reload
+      touch_collection_cache!(@collection.id)
       render_json_dump(collection: serialize_collection(@collection))
     end
 
     def role_events
-      events =
-        @collection
-          .collection_role_events
-          .includes(:actor_user, :target_user, :from_user, :to_user)
-          .order(created_at: :desc)
-          .limit(limit_param)
+      limit = limit_param
+      payload =
+        Discourse.cache.fetch(
+          DiscourseCollections::Cache.role_events_key(collection_id: @collection.id, limit: limit),
+          expires_in: ROLE_EVENTS_CACHE_TTL,
+        ) do
+          events =
+            @collection
+              .collection_role_events
+              .includes(:actor_user, :target_user, :from_user, :to_user)
+              .order(created_at: :desc)
+              .limit(limit)
+          { role_events: events.map { |event| serialize_role_event(event) } }
+        end
 
-      render_json_dump(role_events: events.map { |event| serialize_role_event(event) })
+      render_json_dump(role_events: payload[:role_events])
     end
 
     def follow
       follow = @collection.follow!(current_user)
+      touch_collection_cache!(@collection.id)
       render_json_dump(
         follow: {
           id: follow.id,
@@ -214,12 +340,14 @@ module DiscourseCollections
 
     def unfollow
       @collection.unfollow!(current_user)
+      touch_collection_cache!(@collection.id)
       render json: success_json
     end
 
     def set_recommended
       value = ActiveModel::Type::Boolean.new.cast(params.require(:recommended))
       @collection.update!(recommended: value)
+      touch_collection_cache!(@collection.id)
       render_json_dump(collection: serialize_collection(@collection.reload))
     end
 
@@ -233,8 +361,7 @@ module DiscourseCollections
       Collection.includes(:creator, :owner)
     end
 
-    def apply_filter(scope)
-      filter = params[:filter].presence || "latest"
+    def apply_filter(scope, filter = normalized_filter)
       return scope.latest_first if !PLAZA_FILTERS.include?(filter)
 
       case filter
@@ -250,10 +377,15 @@ module DiscourseCollections
       end
     end
 
-    def apply_search(scope)
-      q = params[:q].to_s.strip
+    def apply_search(scope, q = params[:q].to_s.strip)
       return scope if q.blank?
       scope.where("collections.title ILIKE :q OR collections.description ILIKE :q", q: "%#{q}%")
+    end
+
+    def normalized_filter
+      filter = params[:filter].presence || "latest"
+      return "latest" if !PLAZA_FILTERS.include?(filter)
+      filter
     end
 
     def fetch_user
@@ -294,7 +426,36 @@ module DiscourseCollections
       [[params.fetch(:limit, 50).to_i, 1].max, 100].min
     end
 
-    def serialize_collection(collection, include_items: false, collection_items: nil)
+    def serialize_collection(
+      collection,
+      include_items: false,
+      collection_items: nil,
+      stats: nil,
+      viewer: current_user,
+      contains_topic_id: nil,
+      contains_post_id: nil
+    )
+      items_count = stats&.fetch(:items_count, nil)
+      items_count = collection.collection_items.count if items_count.nil?
+      followers_count = stats&.fetch(:followers_count, nil)
+      followers_count = collection.collection_follows.count if followers_count.nil?
+      current_user_is_maintainer = stats&.fetch(:current_user_is_maintainer, nil)
+      current_user_is_maintainer = collection.maintainer?(viewer) if current_user_is_maintainer.nil?
+      followed_by_current_user = stats&.fetch(:followed_by_current_user, nil)
+      followed_by_current_user = collection.followed_by?(viewer) if followed_by_current_user.nil?
+      maintainers_count = stats&.fetch(:maintainers_count, nil)
+      maintainers_count =
+        collection.collection_memberships.where(status: CollectionMembership.statuses[:active]).count if maintainers_count.nil?
+      already_contains = stats&.fetch(:already_contains, nil)
+      if already_contains.nil?
+        already_contains =
+          already_contains_target?(
+            collection,
+            contains_topic_id: contains_topic_id,
+            contains_post_id: contains_post_id,
+          )
+      end
+
       payload = {
         id: collection.id,
         title: collection.title,
@@ -308,20 +469,16 @@ module DiscourseCollections
         created_at: collection.created_at,
         updated_at: collection.updated_at,
         recommended: collection.recommended,
-        items_count: collection.collection_items.count,
-        followers_count: collection.collection_follows.count,
-        followed_by_current_user: collection.followed_by?(current_user),
-        current_user_can_manage: current_user.present? && collection.owner_user_id == current_user.id,
+        items_count: items_count,
+        followers_count: followers_count,
+        followed_by_current_user: followed_by_current_user,
+        current_user_can_manage: viewer.present? && collection.owner_user_id == viewer.id,
         current_user_can_invite:
-          current_user.present? && collection.can_invite_maintainers?(current_user),
-        current_user_is_maintainer: collection.maintainer?(current_user),
-        current_user_can_apply_maintainer:
-          current_user.present? &&
-            !collection.maintainer?(current_user) &&
-            collection.owner_user_id != current_user.id,
-        already_contains: already_contains_target?(collection),
-        maintainers_count:
-          collection.collection_memberships.where(status: CollectionMembership.statuses[:active]).count,
+          viewer.present? && collection.can_invite_maintainers?(viewer),
+        current_user_is_maintainer: current_user_is_maintainer,
+        current_user_can_apply_maintainer: viewer.present? && !current_user_is_maintainer && collection.owner_user_id != viewer.id,
+        already_contains: already_contains,
+        maintainers_count: maintainers_count,
       }
 
       if include_items
@@ -342,6 +499,87 @@ module DiscourseCollections
       end
 
       payload
+    end
+
+    def serialize_collections(collections, viewer: current_user, contains_topic_id: nil, contains_post_id: nil)
+      stats_by_collection_id =
+        preload_collection_stats(
+          collections,
+          viewer: viewer,
+          contains_topic_id: contains_topic_id,
+          contains_post_id: contains_post_id,
+        )
+      collections.map do |collection|
+        serialize_collection(
+          collection,
+          stats: stats_by_collection_id[collection.id],
+          viewer: viewer,
+          contains_topic_id: contains_topic_id,
+          contains_post_id: contains_post_id,
+        )
+      end
+    end
+
+    def preload_collection_stats(collections, viewer: nil, contains_topic_id: nil, contains_post_id: nil)
+      ids = collections.map(&:id)
+      return {} if ids.blank?
+
+      active_status = CollectionMembership.statuses[:active]
+      stats_by_id = {}
+      ids.each do |collection_id|
+        stats_by_id[collection_id] = {
+          items_count: 0,
+          followers_count: 0,
+          maintainers_count: 0,
+          followed_by_current_user: false,
+          current_user_is_maintainer: false,
+          already_contains: nil,
+        }
+      end
+
+      CollectionItem.where(collection_id: ids).group(:collection_id).count.each do |collection_id, count|
+        stats_by_id[collection_id][:items_count] = count
+      end
+
+      CollectionFollow.where(collection_id: ids).group(:collection_id).count.each do |collection_id, count|
+        stats_by_id[collection_id][:followers_count] = count
+      end
+
+      CollectionMembership.where(collection_id: ids, status: active_status).group(:collection_id).count.each do |collection_id, count|
+        stats_by_id[collection_id][:maintainers_count] = count
+      end
+
+      if viewer.present?
+        followed_ids = CollectionFollow.where(collection_id: ids, user_id: viewer.id).pluck(:collection_id).to_set
+        membership_ids =
+          CollectionMembership.where(collection_id: ids, user_id: viewer.id, status: active_status).pluck(
+            :collection_id,
+          ).to_set
+
+        collections.each do |collection|
+          stats_by_id[collection.id][:followed_by_current_user] = followed_ids.include?(collection.id)
+          stats_by_id[collection.id][:current_user_is_maintainer] =
+            collection.owner_user_id == viewer.id || membership_ids.include?(collection.id)
+        end
+      end
+
+      contains_ids = nil
+      if contains_post_id.present?
+        contains_ids = CollectionItem.where(collection_id: ids, post_id: contains_post_id).pluck(:collection_id).to_set
+      elsif contains_topic_id.present?
+        contains_ids =
+          CollectionItem.where(collection_id: ids, topic_id: contains_topic_id, post_id: nil).pluck(
+            :collection_id,
+          ).to_set
+      end
+
+      if contains_ids.present?
+        ids.each do |collection_id|
+          stats_by_id[collection_id][:already_contains] = contains_ids.include?(collection_id)
+        end
+      end
+
+      stats_by_id
     end
 
     def serialize_item(item)
@@ -431,14 +669,73 @@ module DiscourseCollections
       )
     end
 
-    def already_contains_target?(collection)
-      return nil if @contains_target_topic_id.blank? && @contains_target_post_id.blank?
+    def already_contains_target?(collection, contains_topic_id:, contains_post_id:)
+      return nil if contains_topic_id.blank? && contains_post_id.blank?
 
-      if @contains_target_post_id.present?
-        collection.collection_items.exists?(post_id: @contains_target_post_id)
+      if contains_post_id.present?
+        collection.collection_items.exists?(post_id: contains_post_id)
       else
-        collection.collection_items.exists?(topic_id: @contains_target_topic_id, post_id: nil)
+        collection.collection_items.exists?(topic_id: contains_topic_id, post_id: nil)
       end
+    end
+
+    def apply_current_user_overlay(collections_payload, contains_topic_id:, contains_post_id:)
+      return collections_payload if current_user.blank? || collections_payload.blank?
+
+      collection_ids = collections_payload.map { |payload| payload[:id] }
+      active_status = CollectionMembership.statuses[:active]
+
+      followed_ids =
+        CollectionFollow.where(collection_id: collection_ids, user_id: current_user.id).pluck(:collection_id).to_set
+      membership_ids =
+        CollectionMembership.where(collection_id: collection_ids, user_id: current_user.id, status: active_status).pluck(
+          :collection_id,
+        ).to_set
+
+      contains_ids = nil
+      if contains_post_id.present?
+        contains_ids =
+          CollectionItem.where(collection_id: collection_ids, post_id: contains_post_id).pluck(:collection_id).to_set
+      elsif contains_topic_id.present?
+        contains_ids =
+          CollectionItem.where(collection_id: collection_ids, topic_id: contains_topic_id, post_id: nil).pluck(
+            :collection_id,
+          ).to_set
+      end
+
+      collections_payload.map do |payload|
+        owner_user_id = payload[:owner_user_id]
+        creator_user_id = payload[:creator_user_id]
+        current_user_is_maintainer =
+          owner_user_id == current_user.id || membership_ids.include?(payload[:id])
+
+        payload.merge(
+          followed_by_current_user: followed_ids.include?(payload[:id]),
+          current_user_is_maintainer: current_user_is_maintainer,
+          current_user_can_manage: owner_user_id == current_user.id,
+          current_user_can_invite: owner_user_id == current_user.id || creator_user_id == current_user.id,
+          current_user_can_apply_maintainer: !current_user_is_maintainer && owner_user_id != current_user.id,
+          already_contains:
+            if contains_ids.present?
+              contains_ids.include?(payload[:id])
+            else
+              payload[:already_contains]
+            end,
+        )
+      end
+    end
+
+    def apply_current_user_overlay_to_collection(collection_payload, contains_topic_id:, contains_post_id:)
+      return collection_payload if collection_payload.blank?
+      apply_current_user_overlay(
+        [collection_payload],
+        contains_topic_id: contains_topic_id,
+        contains_post_id: contains_post_id,
+      ).first
+    end
+
+    def touch_collection_cache!(collection_id)
+      DiscourseCollections::Cache.touch_collection!(collection_id)
     end
 
     def collection_params
