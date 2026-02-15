@@ -1,0 +1,5 @@
+en:
+  site_settings:
+    collections_enabled: "Enable discourse collections plugin"
+    min_trust_level_to_create_collection: "Minimum trust level required to create collections"
+    max_collections_per_user: "Maximum number of collections a user can create"

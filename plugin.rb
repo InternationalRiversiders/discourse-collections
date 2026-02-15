@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # name: discourse-collections
 # about: Adds a "Collections" feature similar to Discuz! Tao Album
 # version: 0.1
@@ -6,30 +8,29 @@
 
 enabled_site_setting :collections_enabled
 
-register_asset 'stylesheets/collections.scss'
+register_asset "stylesheets/collections.scss"
+
+module ::DiscourseCollections
+  PLUGIN_NAME = "discourse-collections"
+end
+
+require_relative "lib/discourse_collections/engine"
+
+Discourse::Application.routes.append { mount ::DiscourseCollections::Engine, at: "/collections" }
 
 after_initialize do
-  # 加载后端文件
-  module ::DiscourseCollections
-    class Engine < ::Rails::Engine
-      engine_name "discourse_collections"
-      isolate_namespace DiscourseCollections
-    end
-  end
-
-  # 定义后端路由
-  Discourse::Application.routes.draw do
-    mount ::DiscourseCollections::Engine, at: "/collections"
-  end
-
   DiscourseCollections::Engine.routes.draw do
     get "/" => "collections#index"
     post "/" => "collections#create"
-    post "/:id/add_topic" => "collections#add_topic"
+    get "/:id" => "collections#show"
+    post "/:id/items" => "collections#add_item"
+    delete "/:id/items/:item_id" => "collections#remove_item"
+    put "/:id/items/:item_id/move" => "collections#move_item"
+
+    # Backward-compatible alias for early local testing.
+    post "/:id/add_topic" => "collections#add_item"
   end
 
-  # 扩展 User Serializer，让前端知道当前用户有哪些专辑
-  add_to_serializer(:user, :can_create_collections) do
-    scope.user.present?
-  end
+  # 让前端能判断当前用户是否可创建专辑
+  add_to_serializer(:current_user, :can_create_collections) { object.present? }
 end

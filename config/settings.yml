@@ -1,0 +1,16 @@
+plugins:
+  collections_enabled:
+    default: false
+    client: true
+  min_trust_level_to_create_collection:
+    default: 1
+    type: enum
+    choices:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+  max_collections_per_user:
+    default: 50
+    min: 1

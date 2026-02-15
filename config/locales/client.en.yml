@@ -1,0 +1,7 @@
+en:
+  js:
+    collections:
+      add_to_collection: "Add to Collection"
+      add_to_collection_title: "Add this topic to one of your collections"
+      index_title: "Collections"
+      index_description: "Collection plaza is under construction."
