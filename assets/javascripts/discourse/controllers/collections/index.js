@@ -3,7 +3,10 @@ import { action } from "@ember/object";
 import { cancel, debounce } from "@ember/runloop";
 
 export default class CollectionsIndexController extends Controller {
-  queryParams = ["filter", "q"];
+  queryParams = {
+    filter: { as: "collections_filter" },
+    q: { as: "collections_q" },
+  };
   filter = "latest";
   q = "";
   searchDebounce = null;
