@@ -1,7 +1,83 @@
 en:
   js:
+    notifications:
+      alt:
+        collections:
+          collected: "collected into an album"
+
     collections:
-      add_to_collection: "Add to Collection"
-      add_to_collection_title: "Add this topic to one of your collections"
-      index_title: "Collections"
-      index_description: "Collection plaza is under construction."
+      nav_title: "淘专辑"
+      add_to_collection: "Collect"
+      add_to_collection_title: "Add this topic to a collection"
+      collect_reply: "Collect Reply"
+      search_placeholder: "Search collections"
+      empty_plaza: "No collections yet."
+      index_title: "淘专辑广场"
+      index_description: "Discover curated topics and replies from the community."
+      filters:
+        latest: "Latest"
+        most_followed: "Most Followed"
+        recommended: "Recommended"
+      card:
+        by_user: "by %{username}"
+        items_count:
+          one: "%{count} item"
+          other: "%{count} items"
+        followers_count:
+          one: "%{count} follower"
+          other: "%{count} followers"
+      columns:
+        collection: "Collection"
+        items: "Items"
+        followers: "Followers"
+        actions: "Actions"
+      detail:
+        creator: "Creator: %{username}"
+        owner: "Owner: %{username}"
+        edit: "Edit"
+        save: "Save"
+        share: "Share"
+        edit_title_placeholder: "Collection title"
+        edit_description_placeholder: "Collection description"
+        follow: "Follow"
+        unfollow: "Unfollow"
+        apply_maintainer: "Apply as Maintainer"
+        items: "Collected Content"
+        reply_ref: "Reply #%{post_id}"
+        empty_items: "No collected content yet."
+        maintainers: "Maintainers"
+        invite_maintainer: "Invite Maintainer"
+        username_placeholder: "Target username"
+        invite_note_placeholder: "Invitation note (optional)"
+        invite: "Invite"
+        pending_applications: "Self-Nominations"
+        approve: "Approve"
+        reject: "Reject"
+        no_pending: "No pending applications."
+        transfer_owner: "Transfer Ownership"
+        new_owner_placeholder: "New owner username"
+        transfer: "Transfer"
+        role_events: "Role Change Log"
+        no_events: "No role changes yet."
+      user_tab:
+        nav: "Collections"
+        title: "Collections"
+        empty: "This user has not created any collections yet."
+      modal:
+        title: "Add to Collection"
+        subtitle: "Target: %{target}"
+        select_existing: "Select Existing Collection"
+        search_placeholder: "Search my collections"
+        search: "Search"
+        loading: "Loading collections..."
+        empty: "No collections found."
+        already_added: "Already added"
+        quick_create: "Quick Create"
+        quick_create_placeholder: "Collection title"
+        create: "Create"
+        note_label: "Recommendation Note"
+        note_placeholder: "Write why this topic/reply is worth collecting"
+        confirm_add: "Add"
+      notifications:
+        title: "Your content was collected"
+        collected: "<p><span>%{username}</span> collected your content into <strong>%{collection_title}</strong>.</p>"
