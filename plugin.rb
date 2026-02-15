@@ -20,6 +20,12 @@ require_relative "lib/discourse_collections/meta_tags_builder"
 
 Discourse::Application.routes.append do
   get "/collections" => "list#home", constraints: ->(request) { request.format.html? }
+  get "/collections(.:format)" =>
+        "discourse_collections/collections#index",
+        constraints: ->(request) { request.format.json? }
+  post "/collections(.:format)" =>
+         "discourse_collections/collections#create",
+         constraints: ->(request) { request.format.json? }
   get "/collections/:id" => "list#home",
                              constraints: ->(request) do
                                request.format.html? && request.path_parameters[:id].to_s.match?(/\A\d+\z/)
