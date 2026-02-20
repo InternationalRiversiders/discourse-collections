@@ -62,4 +62,15 @@ RSpec.describe Collection do
       expect(collection.collection_role_events.ownership_transferred.count).to eq(1)
     end
   end
+
+  describe "#soft_delete!" do
+    it "sets deleted_at and excludes it from visible scopes" do
+      collection = Collection.create!(creator: creator, owner: creator, title: "Soft Delete")
+
+      collection.soft_delete!
+
+      expect(collection.reload.deleted_at).to be_present
+      expect(Collection.not_deleted.exists?(collection.id)).to eq(false)
+    end
+  end
 end

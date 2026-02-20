@@ -17,6 +17,7 @@ module DiscourseCollections
                   only: [
                     :create,
                     :update,
+                    :destroy,
                     :mine,
                     :add_item,
                     :remove_item,
@@ -35,6 +36,7 @@ module DiscourseCollections
                   only: [
                     :show,
                     :update,
+                    :destroy,
                     :add_item,
                     :remove_item,
                     :move_item,
@@ -52,6 +54,7 @@ module DiscourseCollections
     before_action :ensure_maintainer!, only: [:add_item, :remove_item, :move_item]
     before_action :ensure_owner!,
                   only: [
+                    :destroy,
                     :approve_maintainer,
                     :reject_maintainer,
                     :remove_maintainer,
@@ -171,7 +174,7 @@ module DiscourseCollections
         return render_json_error("Your trust level is too low to create a collection", status: 403)
       end
 
-      if Collection.where(creator_user_id: current_user.id).count >= SiteSetting.max_collections_per_user.to_i
+      if Collection.for_creator(current_user.id).count >= SiteSetting.max_collections_per_user.to_i
         return render_json_error("You have reached the collection limit", status: 422)
       end
 
@@ -194,6 +197,12 @@ module DiscourseCollections
       else
         render_json_error(@collection)
       end
+    end
+
+    def destroy
+      @collection.soft_delete!
+      touch_collection_cache!(@collection.id)
+      render json: success_json
     end
 
     def show
@@ -357,11 +366,11 @@ module DiscourseCollections
     private
 
     def find_collection
-      @collection = Collection.includes(:creator, :owner).find(params[:id])
+      @collection = Collection.not_deleted.includes(:creator, :owner).find(params[:id])
     end
 
     def base_plaza_scope
-      Collection.includes(:creator, :owner)
+      Collection.not_deleted.includes(:creator, :owner)
     end
 
     def apply_filter(scope, filter = normalized_filter)
@@ -405,7 +414,7 @@ module DiscourseCollections
       when "maintaining"
         Collection.for_maintainer(current_user.id).where.not(owner_user_id: current_user.id)
       when "following"
-        Collection.joins(:collection_follows).where(collection_follows: { user_id: current_user.id })
+        Collection.not_deleted.joins(:collection_follows).where(collection_follows: { user_id: current_user.id })
       else
         Collection.manageable_by(current_user.id)
       end

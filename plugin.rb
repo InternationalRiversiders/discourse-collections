@@ -51,6 +51,7 @@ after_initialize do
     get "/user/:username" => "collections#by_user"
     post "/" => "collections#create"
     put "/:id" => "collections#update"
+    delete "/:id" => "collections#destroy"
     get "/:id" => "collections#show"
     post "/:id/items" => "collections#add_item"
     delete "/:id/items/:item_id" => "collections#remove_item"

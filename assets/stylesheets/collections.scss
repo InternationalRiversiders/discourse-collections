@@ -38,6 +38,25 @@
   margin-bottom: 1rem;
 }
 
+.collections-mine__create {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(220px, 1.3fr) minmax(260px, 2fr) auto;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.collections-mine__actions {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+}
+
+.collections-mine__transfer-chooser {
+  min-width: 180px;
+}
+
 .collections-topic-list .num {
   white-space: nowrap;
 }
@@ -253,5 +272,10 @@
 
   .collections-plaza__controls {
     min-width: 0;
+  }
+
+  .collections-mine__create,
+  .collections-mine__actions {
+    grid-template-columns: 1fr;
   }
 }

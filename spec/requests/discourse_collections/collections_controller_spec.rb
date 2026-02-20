@@ -115,6 +115,42 @@ RSpec.describe DiscourseCollections::CollectionsController do
     end
   end
 
+  describe "destroy flow" do
+    it "allows owner to delete a collection" do
+      collection = Collection.create!(creator: creator, owner: creator, title: "Disposable")
+
+      sign_in(creator)
+      delete "/collections/#{collection.id}.json"
+
+      expect(response.status).to eq(200)
+      expect(collection.reload.deleted_at).to be_present
+    end
+
+    it "blocks non-owner from deleting a collection" do
+      collection = Collection.create!(creator: creator, owner: creator, title: "Protected")
+
+      sign_in(other_user)
+      delete "/collections/#{collection.id}.json"
+
+      expect(response.status).to eq(403)
+      expect(collection.reload.deleted_at).to be_nil
+    end
+
+    it "hides soft-deleted collection from mine list" do
+      collection = Collection.create!(creator: creator, owner: creator, title: "Hidden After Delete")
+
+      sign_in(creator)
+      delete "/collections/#{collection.id}.json"
+      expect(response.status).to eq(200)
+
+      get "/collections/mine.json", params: { scope: "owned" }
+
+      expect(response.status).to eq(200)
+      ids = json_response.fetch("collections").map { |c| c.fetch("id") }
+      expect(ids).not_to include(collection.id)
+    end
+  end
+
   describe "mine query" do
     it "returns manageable collections without relation incompatibility errors" do
       collection = Collection.create!(creator: creator, owner: creator, title: "Mine")

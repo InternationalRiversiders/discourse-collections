@@ -23,13 +23,14 @@ class Collection < ActiveRecord::Base
   validates :description, length: { maximum: 2000 }, allow_blank: true
   validates :recommended, inclusion: { in: [true, false] }
 
+  scope :not_deleted, -> { where(deleted_at: nil) }
   scope :latest_first, -> { order(created_at: :desc) }
-  scope :recommended_first, -> { where(recommended: true).order(created_at: :desc) }
-  scope :for_creator, ->(user_id) { where(creator_user_id: user_id) }
-  scope :for_owner, ->(user_id) { where(owner_user_id: user_id) }
+  scope :recommended_first, -> { not_deleted.where(recommended: true).order(created_at: :desc) }
+  scope :for_creator, ->(user_id) { not_deleted.where(creator_user_id: user_id) }
+  scope :for_owner, ->(user_id) { not_deleted.where(owner_user_id: user_id) }
 
   def self.for_maintainer(user_id)
-    joins(:collection_memberships).where(
+    not_deleted.joins(:collection_memberships).where(
       collection_memberships: {
         user_id: user_id,
         status: CollectionMembership.statuses[:active],
@@ -38,7 +39,7 @@ class Collection < ActiveRecord::Base
   end
 
   def self.manageable_by(user_id)
-    left_joins(:collection_memberships).where(
+    not_deleted.left_joins(:collection_memberships).where(
       <<~SQL,
         collections.creator_user_id = :user_id
         OR collections.owner_user_id = :user_id
@@ -50,6 +51,11 @@ class Collection < ActiveRecord::Base
       user_id: user_id,
       active_status: CollectionMembership.statuses[:active],
     ).distinct
+  end
+
+  def soft_delete!
+    return if deleted_at.present?
+    update!(deleted_at: Time.zone.now, recommended: false)
   end
 
   def add_topic(topic_id, note: nil, collected_by_user:)

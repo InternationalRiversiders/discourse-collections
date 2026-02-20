@@ -20,22 +20,29 @@
 ### 2. 角色与协作
 - 角色区分：创建者（Creator）、拥有者（Owner）、维护者（Maintainer）
 - 初始创建时：创建者 = 拥有者，且创建者默认是维护者
-- 拥有者权限：邀请维护者、移除维护者、审批/拒绝自荐、转交所有权
+- 拥有者权限：邀请维护者、移除维护者、审批/拒绝自荐、转交所有权、删除专辑
 - 维护者可通过邀请加入，也可“毛遂自荐”并由拥有者审批
 - 角色变化会写入专门的审计记录（role events）
 
-### 3. 发现与流量
+### 3. 拥有的专辑管理页
+- 路由：`/collections/mine/owned`
+- 支持查看自己拥有的专辑列表
+- 支持快速创建新专辑（标题 + 简介）
+- 支持行内转移所有权（用户选择器）
+- 支持删除专辑（带确认）
+
+### 4. 发现与流量
 - 专辑广场：`/collections`
 - 专辑详情：`/collections/:id`
 - 用户专辑：`/u/:username/collections`
 - 支持关注/取消关注
 - 支持 staff 推荐标记
 
-### 4. 通知与分享
+### 5. 通知与分享
 - 内容被收录时，通知原作者
 - 专辑详情页输出 Open Graph / Twitter Meta 标签，优化外部分享预览
 
-### 5. 后台可配置项
+### 6. 后台可配置项
 - `collections_enabled`
 - `min_trust_level_to_create_collection`
 - `max_collections_per_user`
@@ -53,6 +60,7 @@
 说明：
 
 - `collections` 包含 `created_at` / `updated_at`
+- `collections` 包含 `deleted_at`（软删除标记）
 - `collection_items` 包含 `collected_at`（收录时间）
 - 维护者与拥有者的演进通过 `collection_memberships` + `collection_role_events` 记录
 
@@ -63,6 +71,7 @@
 - `GET /collections/user/:username.json`
 - `POST /collections.json`
 - `PUT /collections/:id.json`
+- `DELETE /collections/:id.json`（软删除，写入 `deleted_at`）
 - `GET /collections/:id.json`
 - `POST /collections/:id/items.json`
 - `DELETE /collections/:id/items/:item_id.json`

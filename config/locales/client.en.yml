@@ -72,6 +72,14 @@ en:
         empty: "This user has not created any collections yet."
       mine:
         empty: "No collections found."
+        create_title_placeholder: "新建专辑标题"
+        create_description_placeholder: "新建专辑简介（可选）"
+        create_button: "创建专辑"
+        transfer_placeholder: "输入新拥有者用户名"
+        transfer_button: "转移所有权"
+        delete_button: "删除专辑"
+        delete_confirm: "确认删除《%{title}》？该操作不可恢复。"
+        delete_confirm_button: "确认删除"
         scopes:
           owned: "拥有的淘专辑"
           maintaining: "维护的淘专辑"

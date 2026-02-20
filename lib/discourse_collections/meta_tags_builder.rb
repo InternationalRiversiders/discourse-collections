@@ -20,7 +20,7 @@ module DiscourseCollections
         DiscourseCollections::Cache.meta_tags_key(collection_id: collection_id),
         expires_in: 10.minutes,
       ) do
-        collection = Collection.includes(:creator).find_by(id: collection_id)
+        collection = Collection.not_deleted.includes(:creator).find_by(id: collection_id)
         next "" if collection.blank?
 
         avatar_template = collection.creator&.avatar_template

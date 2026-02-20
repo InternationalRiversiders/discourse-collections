@@ -67,6 +67,12 @@ export function updateCollection(collectionId, { title, description }) {
   });
 }
 
+export function deleteCollection(collectionId) {
+  return ajax(jsonPath(`/collections/${collectionId}`), {
+    type: "DELETE",
+  });
+}
+
 export function addCollectionItem(collectionId, { topicId, postId, note }) {
   const data = { note };
   if (postId) {
