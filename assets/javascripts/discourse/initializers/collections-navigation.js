@@ -1,5 +1,6 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
 import { i18n } from "discourse-i18n";
+import CollectReplyButton from "discourse/plugins/discourse-collections/discourse/components/post-menu/collect-reply-button";
 
 export default {
   name: "collections-navigation",
@@ -11,6 +12,35 @@ export default {
     }
 
     withPluginApi((api) => {
+      api.registerValueTransformer(
+        "post-menu-buttons",
+        ({
+          value: dag,
+          context: {
+            post,
+            buttonKeys,
+            collapsedButtons,
+            lastHiddenButtonKey,
+            secondLastHiddenButtonKey,
+          },
+        }) => {
+          if (!post?.id || post.post_number <= 1) {
+            return;
+          }
+
+          const position = {
+            before: lastHiddenButtonKey || buttonKeys.SHOW_MORE,
+          };
+
+          if (secondLastHiddenButtonKey) {
+            position.after = secondLastHiddenButtonKey;
+          }
+
+          dag.add("collectReply", CollectReplyButton, position);
+          collapsedButtons.hide("collectReply");
+        }
+      );
+
       api.addSidebarSection(
         (BaseCustomSidebarSection, BaseCustomSidebarSectionLink) => {
           const PlazaLink = class extends BaseCustomSidebarSectionLink {
