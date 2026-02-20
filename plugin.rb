@@ -24,9 +24,60 @@ Discourse::Application.routes.append do
   get "/collections(.:format)" =>
         "discourse_collections/collections#index",
         constraints: ->(request) { request.format.json? }
+  get "/collections/mine(.:format)" =>
+        "discourse_collections/collections#mine",
+        constraints: ->(request) { request.format.json? }
+  get "/collections/user/:username(.:format)" =>
+        "discourse_collections/collections#by_user",
+        constraints: ->(request) { request.format.json? }
   post "/collections(.:format)" =>
          "discourse_collections/collections#create",
          constraints: ->(request) { request.format.json? }
+  put "/collections/:id(.:format)" =>
+        "discourse_collections/collections#update",
+        constraints: ->(request) { request.format.json? }
+  get "/collections/:id(.:format)" =>
+        "discourse_collections/collections#show",
+        constraints: ->(request) { request.format.json? }
+  post "/collections/:id/items(.:format)" =>
+        "discourse_collections/collections#add_item",
+        constraints: ->(request) { request.format.json? }
+  delete "/collections/:id/items/:item_id(.:format)" =>
+           "discourse_collections/collections#remove_item",
+           constraints: ->(request) { request.format.json? }
+  put "/collections/:id/items/:item_id/move(.:format)" =>
+        "discourse_collections/collections#move_item",
+        constraints: ->(request) { request.format.json? }
+  post "/collections/:id/maintainers/invite(.:format)" =>
+        "discourse_collections/collections#invite_maintainer",
+        constraints: ->(request) { request.format.json? }
+  post "/collections/:id/maintainers/apply(.:format)" =>
+        "discourse_collections/collections#apply_maintainer",
+        constraints: ->(request) { request.format.json? }
+  put "/collections/:id/maintainers/:user_id/approve(.:format)" =>
+        "discourse_collections/collections#approve_maintainer",
+        constraints: ->(request) { request.format.json? }
+  put "/collections/:id/maintainers/:user_id/reject(.:format)" =>
+        "discourse_collections/collections#reject_maintainer",
+        constraints: ->(request) { request.format.json? }
+  delete "/collections/:id/maintainers/:user_id(.:format)" =>
+           "discourse_collections/collections#remove_maintainer",
+           constraints: ->(request) { request.format.json? }
+  put "/collections/:id/owner(.:format)" =>
+        "discourse_collections/collections#transfer_ownership",
+        constraints: ->(request) { request.format.json? }
+  put "/collections/:id/recommended(.:format)" =>
+        "discourse_collections/collections#set_recommended",
+        constraints: ->(request) { request.format.json? }
+  post "/collections/:id/follow(.:format)" =>
+        "discourse_collections/collections#follow",
+        constraints: ->(request) { request.format.json? }
+  delete "/collections/:id/follow(.:format)" =>
+           "discourse_collections/collections#unfollow",
+           constraints: ->(request) { request.format.json? }
+  get "/collections/:id/role-events(.:format)" =>
+        "discourse_collections/collections#role_events",
+        constraints: ->(request) { request.format.json? }
   get "/collections/:id" => "list#home",
                              constraints: ->(request) do
                                request.format.html? && request.path_parameters[:id].to_s.match?(/\A\d+\z/)
