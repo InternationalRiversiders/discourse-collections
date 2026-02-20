@@ -24,6 +24,9 @@ Discourse::Application.routes.append do
   get "/collections(.:format)" =>
         "discourse_collections/collections#index",
         constraints: ->(request) { request.format.json? }
+  get "/collections/mine(.:format)" =>
+        "discourse_collections/collections#mine",
+        constraints: ->(request) { request.format.json? }
   post "/collections(.:format)" =>
          "discourse_collections/collections#create",
          constraints: ->(request) { request.format.json? }
