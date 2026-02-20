@@ -14,12 +14,14 @@ export function listCollections({ filter = "latest", q = "" } = {}) {
 }
 
 export function listMyCollections({
+  scope = null,
   q = "",
   containsTopicId = null,
   containsPostId = null,
 } = {}) {
   return ajax(jsonPath("/collections/mine"), {
     data: {
+      scope,
       q,
       contains_topic_id: containsTopicId,
       contains_post_id: containsPostId,

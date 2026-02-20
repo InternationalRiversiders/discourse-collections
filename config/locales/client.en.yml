@@ -7,6 +7,13 @@ en:
 
     collections:
       nav_title: "淘专辑"
+      sidebar:
+        title: "淘专辑"
+        links:
+          plaza: "专辑广场"
+          owned: "拥有的专辑"
+          maintaining: "维护的专辑"
+          following: "关注的专辑"
       add_to_collection: "Collect"
       add_to_collection_title: "Add this topic to a collection"
       collect_reply: "Collect Reply"
@@ -63,6 +70,12 @@ en:
         nav: "Collections"
         title: "Collections"
         empty: "This user has not created any collections yet."
+      mine:
+        empty: "No collections found."
+        scopes:
+          owned: "拥有的淘专辑"
+          maintaining: "维护的淘专辑"
+          following: "关注的淘专辑"
       modal:
         title: "Add to Collection"
         subtitle: "Target: %{target}"

@@ -6,6 +6,7 @@ module DiscourseCollections
     requires_plugin "discourse-collections"
 
     PLAZA_FILTERS = %w[latest most_followed recommended].freeze
+    MINE_SCOPES = %w[all owned maintaining following].freeze
     INDEX_CACHE_TTL = 2.minutes
     BY_USER_CACHE_TTL = 2.minutes
     MINE_CACHE_TTL = 45.seconds
@@ -96,6 +97,7 @@ module DiscourseCollections
     end
 
     def mine
+      scope = normalized_mine_scope
       contains_topic_id = params[:contains_topic_id].presence&.to_i
       contains_post_id = params[:contains_post_id].presence&.to_i
       q = params[:q].to_s.strip
@@ -105,6 +107,7 @@ module DiscourseCollections
         Discourse.cache.fetch(
           DiscourseCollections::Cache.mine_key(
             user_id: current_user.id,
+            scope: scope,
             q: q,
             limit: limit,
             contains_topic_id: contains_topic_id,
@@ -112,7 +115,7 @@ module DiscourseCollections
           ),
           expires_in: MINE_CACHE_TTL,
         ) do
-          collections = Collection.manageable_by(current_user.id).includes(:creator, :owner)
+          collections = scoped_mine_collections(scope).includes(:creator, :owner)
           collections = apply_search(collections, q)
           collections = collections.latest_first.limit(limit).to_a
           {
@@ -386,6 +389,26 @@ module DiscourseCollections
       filter = params[:filter].presence || "latest"
       return "latest" if !PLAZA_FILTERS.include?(filter)
       filter
+    end
+
+    def normalized_mine_scope
+      scope = params[:scope].to_s
+      return "all" if scope.blank?
+      return scope if MINE_SCOPES.include?(scope)
+      "all"
+    end
+
+    def scoped_mine_collections(scope)
+      case scope
+      when "owned"
+        Collection.for_owner(current_user.id)
+      when "maintaining"
+        Collection.for_maintainer(current_user.id).where.not(owner_user_id: current_user.id)
+      when "following"
+        Collection.joins(:collection_follows).where(collection_follows: { user_id: current_user.id })
+      else
+        Collection.manageable_by(current_user.id)
+      end
     end
 
     def fetch_user

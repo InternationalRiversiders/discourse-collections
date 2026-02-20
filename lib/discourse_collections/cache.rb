@@ -21,12 +21,13 @@ module DiscourseCollections
       )
     end
 
-    def mine_key(user_id:, q:, limit:, contains_topic_id:, contains_post_id:)
+    def mine_key(user_id:, scope:, q:, limit:, contains_topic_id:, contains_post_id:)
       join(
         "collections",
         "mine",
         "v#{global_version}",
         "u#{user_id}",
+        "s#{scope}",
         "q#{digest(q)}",
         "l#{limit}",
         "t#{contains_topic_id || 0}",

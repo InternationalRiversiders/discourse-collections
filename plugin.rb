@@ -20,6 +20,7 @@ require_relative "lib/discourse_collections/meta_tags_builder"
 
 Discourse::Application.routes.append do
   get "/collections" => "list#home", constraints: ->(request) { request.format.html? }
+  get "/collections/mine/:scope" => "list#home", constraints: ->(request) { request.format.html? }
   get "/collections(.:format)" =>
         "discourse_collections/collections#index",
         constraints: ->(request) { request.format.json? }

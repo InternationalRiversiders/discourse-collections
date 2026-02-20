@@ -1,0 +1,14 @@
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+
+# Local runtime/cache files
+log/
+tmp/
+coverage/
+
+# Env files
+.env
+.env.*
