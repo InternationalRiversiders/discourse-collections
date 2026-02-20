@@ -19,18 +19,15 @@ require_relative "lib/discourse_collections/cache"
 require_relative "lib/discourse_collections/meta_tags_builder"
 
 Discourse::Application.routes.append do
-  get "/collections" => "list#home", constraints: ->(request) { request.format.html? }
-  get "/collections/mine/:scope" => "list#home", constraints: ->(request) { request.format.html? }
+  get "/collections" => "list#home", format: false
+  get "/collections/mine/:scope" => "list#home", format: false
   get "/collections(.:format)" =>
         "discourse_collections/collections#index",
         constraints: ->(request) { request.format.json? }
   post "/collections(.:format)" =>
          "discourse_collections/collections#create",
          constraints: ->(request) { request.format.json? }
-  get "/collections/:id" => "list#home",
-                             constraints: ->(request) do
-                               request.format.html? && request.path_parameters[:id].to_s.match?(/\A\d+\z/)
-                             end
+  get "/collections/:id" => "list#home", constraints: { id: /\d+/ }, format: false
   get "/u/:username/collections" => "users#show", constraints: { username: USERNAME_ROUTE_FORMAT }
 end
 
